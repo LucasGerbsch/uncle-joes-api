@@ -191,24 +191,42 @@ def get_locations_by_city(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ):
-    sql = f"""
-        SELECT *
-        FROM {LOCATIONS_TABLE}
-        WHERE LOWER(city) = LOWER(@city)
-        ORDER BY city, state
-        LIMIT @limit OFFSET @offset
-    """
+    try:
+        sql = f"""
+            SELECT *
+            FROM {LOCATIONS_TABLE}
+            WHERE LOWER(city) = LOWER(@city)
+            ORDER BY city, state
+            LIMIT @limit OFFSET @offset
+        """
 
-    job_config = bigquery.QueryJobConfig(
-        query_parameters=[
-            bigquery.ScalarQueryParameter("city", "STRING", city_name),
-            bigquery.ScalarQueryParameter("limit", "INT64", limit),
-            bigquery.ScalarQueryParameter("offset", "INT64", offset),
-        ]
-    )
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("city", "STRING", city_name),
+                bigquery.ScalarQueryParameter("limit", "INT64", limit),
+                bigquery.ScalarQueryParameter("offset", "INT64", offset),
+            ]
+        )
 
-    rows = client.query(sql, job_config=job_config).result()
-    return rows_to_dicts(rows)
+        rows = client.query(sql, job_config=job_config).result()
+        results = rows_to_dicts(rows)
+
+        if not results:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No locations found for city '{city_name}'."
+            )
+
+        return results
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Server error while fetching locations: {str(e)}"
+        )
+
 
 @app.get("/locations/state/{state_code}")
 def get_locations_by_state(
