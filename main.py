@@ -184,3 +184,28 @@ def get_menu_item(item_id: str):
         raise HTTPException(status_code=404, detail="Menu item not found")
 
     return results[0]
+    
+@app.get("/menu/category/{category_name}")
+def get_menu_by_category(
+    category_name: str,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
+    sql = f"""
+        SELECT *
+        FROM {MENU_TABLE}
+        WHERE UPPER(category) = UPPER(@category)
+        ORDER BY name, size
+        LIMIT @limit OFFSET @offset
+    """
+
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("category", "STRING", category_name),
+            bigquery.ScalarQueryParameter("limit", "INT64", limit),
+            bigquery.ScalarQueryParameter("offset", "INT64", offset),
+        ]
+    )
+
+    rows = client.query(sql, job_config=job_config).result()
+    return rows_to_dicts(rows)
