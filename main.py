@@ -140,28 +140,19 @@ def get_menu_item(item_id: str):
 
     return results[0]
     
-from fastapi import HTTPException
-
 @app.get("/menu/category/{category_name}")
-def get_menu_by_category(
-    category_name: str,
-    limit: int = Query(100, ge=1, le=500),
-    offset: int = Query(0, ge=0),
-):
+def get_menu_by_category(category_name: str):
     try:
         sql = f"""
             SELECT *
             FROM {MENU_TABLE}
             WHERE UPPER(category) = UPPER(@category)
             ORDER BY name, size
-            LIMIT @limit OFFSET @offset
         """
 
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
                 bigquery.ScalarQueryParameter("category", "STRING", category_name),
-                bigquery.ScalarQueryParameter("limit", "INT64", limit),
-                bigquery.ScalarQueryParameter("offset", "INT64", offset),
             ]
         )
 
@@ -186,25 +177,18 @@ def get_menu_by_category(
 
 
 @app.get("/locations/city/{city_name}")
-def get_locations_by_city(
-    city_name: str,
-    limit: int = Query(100, ge=1, le=500),
-    offset: int = Query(0, ge=0),
-):
+def get_locations_by_city(city_name: str):
     try:
         sql = f"""
             SELECT *
             FROM {LOCATIONS_TABLE}
             WHERE LOWER(city) = LOWER(@city)
-            ORDER BY city, state
-            LIMIT @limit OFFSET @offset
+            ORDER BY city, state, address_one
         """
 
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
                 bigquery.ScalarQueryParameter("city", "STRING", city_name),
-                bigquery.ScalarQueryParameter("limit", "INT64", limit),
-                bigquery.ScalarQueryParameter("offset", "INT64", offset),
             ]
         )
 
@@ -229,25 +213,18 @@ def get_locations_by_city(
 
 
 @app.get("/locations/state/{state_code}")
-def get_locations_by_state(
-    state_code: str,
-    limit: int = Query(100, ge=1, le=500),
-    offset: int = Query(0, ge=0),
-):
+def get_locations_by_state(state_code: str):
     try:
         sql = f"""
             SELECT *
             FROM {LOCATIONS_TABLE}
             WHERE LOWER(state) = LOWER(@state)
-            ORDER BY city, state
-            LIMIT @limit OFFSET @offset
+            ORDER BY city, address_one
         """
 
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
                 bigquery.ScalarQueryParameter("state", "STRING", state_code),
-                bigquery.ScalarQueryParameter("limit", "INT64", limit),
-                bigquery.ScalarQueryParameter("offset", "INT64", offset),
             ]
         )
 
