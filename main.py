@@ -219,39 +219,14 @@ def get_locations_by_city(
     sql = f"""
         SELECT *
         FROM {LOCATIONS_TABLE}
-        WHERE UPPER(city) = UPPER(@city)
-        ORDER BY state, city, address_one
+        WHERE LOWER(city) = LOWER(@city)
+        ORDER BY city, state
         LIMIT @limit OFFSET @offset
     """
 
     job_config = bigquery.QueryJobConfig(
         query_parameters=[
             bigquery.ScalarQueryParameter("city", "STRING", city_name),
-            bigquery.ScalarQueryParameter("limit", "INT64", limit),
-            bigquery.ScalarQueryParameter("offset", "INT64", offset),
-        ]
-    )
-
-    rows = client.query(sql, job_config=job_config).result()
-    return rows_to_dicts(rows)
-    
-@app.get("/locations/state/{state_code}")
-def get_locations_by_state(
-    state_code: str,
-    limit: int = Query(100, ge=1, le=500),
-    offset: int = Query(0, ge=0),
-):
-    sql = f"""
-        SELECT *
-        FROM {LOCATIONS_TABLE}
-        WHERE UPPER(state) = UPPER(@state)
-        ORDER BY city, address_one
-        LIMIT @limit OFFSET @offset
-    """
-
-    job_config = bigquery.QueryJobConfig(
-        query_parameters=[
-            bigquery.ScalarQueryParameter("state", "STRING", state_code),
             bigquery.ScalarQueryParameter("limit", "INT64", limit),
             bigquery.ScalarQueryParameter("offset", "INT64", offset),
         ]
