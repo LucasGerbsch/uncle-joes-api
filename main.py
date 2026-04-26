@@ -62,9 +62,12 @@ def root():
         "endpoints": [
             "/locations",
             "/locations/{location_id}",
+            "/locations/city/{city_name}",
+            "/locations/state/{state_code}",
             "/menu",
             "/menu/{item_id}",
-        ],
+            "/menu/category/{category_name}",
+        ]
     }
 
 
