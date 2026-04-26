@@ -1,9 +1,8 @@
 import os
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from google.cloud import bigquery
 
@@ -70,41 +69,14 @@ def root():
 
 
 @app.get("/locations")
-def get_locations(
-    state: Optional[str] = Query(None),
-    city: Optional[str] = Query(None),
-    limit: int = Query(100, ge=1, le=500),
-    offset: int = Query(0, ge=0),
-):
-    where_parts = []
-    params = [
-        bigquery.ScalarQueryParameter("limit", "INT64", limit),
-        bigquery.ScalarQueryParameter("offset", "INT64", offset),
-    ]
-
-    if state:
-        where_parts.append("UPPER(state) = UPPER(@state)")
-        params.append(bigquery.ScalarQueryParameter("state", "STRING", state))
-
-    if city:
-        where_parts.append("UPPER(city) = UPPER(@city)")
-        params.append(bigquery.ScalarQueryParameter("city", "STRING", city))
-
-    where_clause = ""
-    if where_parts:
-        where_clause = "WHERE " + " AND ".join(where_parts)
-
+def get_locations():
     sql = f"""
         SELECT *
         FROM {LOCATIONS_TABLE}
-        {where_clause}
         ORDER BY state, city, address_one
-        LIMIT @limit OFFSET @offset
     """
 
-    job_config = bigquery.QueryJobConfig(query_parameters=params)
-
-    rows = client.query(sql, job_config=job_config).result()
+    rows = client.query(sql).result()
     return rows_to_dicts(rows)
 
 
@@ -114,7 +86,6 @@ def get_location(location_id: str):
         SELECT *
         FROM {LOCATIONS_TABLE}
         WHERE CAST(id AS STRING) = @location_id
-        LIMIT 1
     """
 
     job_config = bigquery.QueryJobConfig(
@@ -133,32 +104,14 @@ def get_location(location_id: str):
 
 
 @app.get("/menu")
-def get_menu(
-    category: Optional[str] = Query(None),
-    limit: int = Query(100, ge=1, le=500),
-    offset: int = Query(0, ge=0),
-):
-    where_clause = ""
-    params = [
-        bigquery.ScalarQueryParameter("limit", "INT64", limit),
-        bigquery.ScalarQueryParameter("offset", "INT64", offset),
-    ]
-
-    if category:
-        where_clause = "WHERE UPPER(category) = UPPER(@category)"
-        params.append(bigquery.ScalarQueryParameter("category", "STRING", category))
-
+def get_menu():
     sql = f"""
         SELECT *
         FROM {MENU_TABLE}
-        {where_clause}
         ORDER BY category, name, size
-        LIMIT @limit OFFSET @offset
     """
 
-    job_config = bigquery.QueryJobConfig(query_parameters=params)
-
-    rows = client.query(sql, job_config=job_config).result()
+    rows = client.query(sql).result()
     return rows_to_dicts(rows)
 
 
@@ -168,7 +121,6 @@ def get_menu_item(item_id: str):
         SELECT *
         FROM {MENU_TABLE}
         WHERE CAST(id AS STRING) = @item_id
-        LIMIT 1
     """
 
     job_config = bigquery.QueryJobConfig(
