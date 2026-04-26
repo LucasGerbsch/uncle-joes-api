@@ -140,30 +140,50 @@ def get_menu_item(item_id: str):
 
     return results[0]
     
+from fastapi import HTTPException
+
 @app.get("/menu/category/{category_name}")
 def get_menu_by_category(
     category_name: str,
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ):
-    sql = f"""
-        SELECT *
-        FROM {MENU_TABLE}
-        WHERE UPPER(category) = UPPER(@category)
-        ORDER BY name, size
-        LIMIT @limit OFFSET @offset
-    """
+    try:
+        sql = f"""
+            SELECT *
+            FROM {MENU_TABLE}
+            WHERE UPPER(category) = UPPER(@category)
+            ORDER BY name, size
+            LIMIT @limit OFFSET @offset
+        """
 
-    job_config = bigquery.QueryJobConfig(
-        query_parameters=[
-            bigquery.ScalarQueryParameter("category", "STRING", category_name),
-            bigquery.ScalarQueryParameter("limit", "INT64", limit),
-            bigquery.ScalarQueryParameter("offset", "INT64", offset),
-        ]
-    )
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("category", "STRING", category_name),
+                bigquery.ScalarQueryParameter("limit", "INT64", limit),
+                bigquery.ScalarQueryParameter("offset", "INT64", offset),
+            ]
+        )
 
-    rows = client.query(sql, job_config=job_config).result()
-    return rows_to_dicts(rows)
+        rows = client.query(sql, job_config=job_config).result()
+        results = rows_to_dicts(rows)
+
+        if not results:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No menu items found for category '{category_name}'."
+            )
+
+        return results
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Server error while fetching menu items: {str(e)}"
+        )
+
 
 @app.get("/locations/city/{city_name}")
 def get_locations_by_city(
