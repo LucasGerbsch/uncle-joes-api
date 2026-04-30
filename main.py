@@ -334,3 +334,30 @@ def get_member_orders(member_id: str):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching orders: {str(e)}")
+
+@app.get("/members/{member_id}/points")
+def get_member_points(member_id: str):
+    try:
+        sql = f"""
+            SELECT SUM(FLOOR(order_total)) AS points
+            FROM `{PROJECT_ID}.{BQ_DATASET}.orders`
+            WHERE member_id = @member_id
+        """
+
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("member_id", "STRING", member_id),
+            ]
+        )
+
+        rows = client.query(sql, job_config=job_config).result()
+        result = rows_to_dicts(rows)[0]
+
+        return {
+            "member_id": member_id,
+            "points": result.get("points", 0)
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error calculating points: {str(e)}")
+
