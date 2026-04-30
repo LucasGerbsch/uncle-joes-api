@@ -299,3 +299,38 @@ def login(credentials: LoginRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Login error: {str(e)}")
 
+@app.get("/members/{member_id}/orders")
+def get_member_orders(member_id: str):
+    try:
+        sql = f"""
+            SELECT
+                o.order_id,
+                o.order_date,
+                o.order_total,
+                l.city,
+                l.state,
+                oi.menu_item_id,
+                oi.item_name,
+                oi.size,
+                oi.quantity,
+                oi.price
+            FROM `{PROJECT_ID}.{BQ_DATASET}.orders` o
+            JOIN `{PROJECT_ID}.{BQ_DATASET}.locations` l
+                ON o.store_id = l.id
+            JOIN `{PROJECT_ID}.{BQ_DATASET}.order_items` oi
+                ON o.order_id = oi.order_id
+            WHERE o.member_id = @member_id
+            ORDER BY o.order_date DESC
+        """
+
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("member_id", "STRING", member_id),
+            ]
+        )
+
+        rows = client.query(sql, job_config=job_config).result()
+        return rows_to_dicts(rows)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching orders: {str(e)}")
