@@ -246,4 +246,56 @@ def get_locations_by_state(state_code: str):
             status_code=500,
             detail=f"Server error while fetching locations: {str(e)}"
         )
+from pydantic import BaseModel
+import bcrypt
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+@app.post("/login")
+def login(credentials: LoginRequest):
+    try:
+        sql = f"""
+            SELECT 
+                string_field_0 AS member_id,
+                string_field_1 AS first_name,
+                string_field_2 AS last_name,
+                string_field_3 AS email,
+                string_field_6 AS home_store,
+                string_field_7 AS password_hash
+            FROM `{PROJECT_ID}.{BQ_DATASET}.members`
+            WHERE LOWER(string_field_3) = LOWER(@email)
+        """
+
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("email", "STRING", credentials.email),
+            ]
+        )
+
+        rows = client.query(sql, job_config=job_config).result()
+        results = rows_to_dicts(rows)
+
+        if not results:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+
+        member = results[0]
+
+        if not bcrypt.checkpw(
+            credentials.password.encode("utf-8"),
+            member["password_hash"].encode("utf-8")
+        ):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+
+        return {
+            "member_id": member["member_id"],
+            "first_name": member["first_name"],
+            "last_name": member["last_name"],
+            "email": member["email"],
+            "home_store": member["home_store"],
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Login error: {str(e)}")
 
