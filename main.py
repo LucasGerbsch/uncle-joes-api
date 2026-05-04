@@ -427,3 +427,118 @@ def get_member_points(member_id: str):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error calculating points: {str(e)}")
+    # Add this Pydantic model at the top with the other models (after LoginRequest)
+class OrderItemRequest(BaseModel):
+    menu_item_id: str
+    quantity: int
+    price: float
+    size: str
+
+
+class CreateOrderRequest(BaseModel):
+    member_id: str
+    store_id: str
+    items: list[OrderItemRequest]
+
+
+# Add this endpoint to main.py
+@app.post("/orders")
+def create_order(order_request: CreateOrderRequest):
+    try:
+        # Calculate order total
+        order_total = sum(item.price * item.quantity for item in order_request.items)
+        
+        # Insert order into ORDERS_TABLE
+        insert_order_sql = f"""
+            INSERT INTO {ORDERS_TABLE} (member_id, store_id, order_date, order_total)
+            VALUES (@member_id, @store_id, CURRENT_TIMESTAMP(), @order_total)
+        """
+        
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("member_id", "STRING", order_request.member_id),
+                bigquery.ScalarQueryParameter("store_id", "STRING", order_request.store_id),
+                bigquery.ScalarQueryParameter("order_total", "FLOAT64", order_total),
+            ]
+        )
+        
+        client.query(insert_order_sql, job_config=job_config).result()
+        
+        # Get the newly created order_id
+        get_order_id_sql = f"""
+            SELECT order_id
+            FROM {ORDERS_TABLE}
+            WHERE member_id = @member_id
+            ORDER BY order_date DESC
+            LIMIT 1
+        """
+        
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("member_id", "STRING", order_request.member_id),
+            ]
+        )
+        
+        rows = client.query(get_order_id_sql, job_config=job_config).result()
+        results = rows_to_dicts(rows)
+        
+        if not results:
+            raise Exception("Failed to retrieve order ID")
+        
+        order_id = results[0]["order_id"]
+        
+        # Insert order items into ORDER_ITEMS_TABLE
+        for item in order_request.items:
+            insert_item_sql = f"""
+                INSERT INTO {ORDER_ITEMS_TABLE} 
+                (order_id, menu_item_id, item_name, size, quantity, price)
+                VALUES (@order_id, @menu_item_id, @item_name, @size, @quantity, @price)
+            """
+            
+            # Get item name from MENU_TABLE
+            get_item_name_sql = f"""
+                SELECT name
+                FROM {MENU_TABLE}
+                WHERE CAST(id AS STRING) = @menu_item_id
+            """
+            
+            item_name_config = bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("menu_item_id", "STRING", item.menu_item_id),
+                ]
+            )
+            
+            item_rows = client.query(get_item_name_sql, job_config=item_name_config).result()
+            item_results = rows_to_dicts(item_rows)
+            
+            if not item_results:
+                raise HTTPException(status_code=404, detail=f"Menu item {item.menu_item_id} not found")
+            
+            item_name = item_results[0]["name"]
+            
+            item_config = bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("order_id", "STRING", order_id),
+                    bigquery.ScalarQueryParameter("menu_item_id", "STRING", item.menu_item_id),
+                    bigquery.ScalarQueryParameter("item_name", "STRING", item_name),
+                    bigquery.ScalarQueryParameter("size", "STRING", item.size),
+                    bigquery.ScalarQueryParameter("quantity", "INT64", item.quantity),
+                    bigquery.ScalarQueryParameter("price", "FLOAT64", item.price),
+                ]
+            )
+            
+            client.query(insert_item_sql, job_config=item_config).result()
+        
+        return {
+            "success": True,
+            "order_id": order_id,
+            "member_id": order_request.member_id,
+            "store_id": order_request.store_id,
+            "order_total": order_total,
+            "item_count": len(order_request.items),
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating order: {str(e)}")
