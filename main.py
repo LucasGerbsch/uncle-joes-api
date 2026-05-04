@@ -441,7 +441,6 @@ class CreateOrderRequest(BaseModel):
     items: list[OrderItemRequest]
 
 
-# Add this endpoint to main.py
 @app.post("/orders")
 def create_order(order_request: CreateOrderRequest):
     try:
@@ -451,7 +450,12 @@ def create_order(order_request: CreateOrderRequest):
         # Insert order into ORDERS_TABLE
         insert_order_sql = f"""
             INSERT INTO {ORDERS_TABLE} (member_id, store_id, order_date, order_total)
-            VALUES (@member_id, @store_id, CURRENT_TIMESTAMP(), @order_total)
+            VALUES (
+                @member_id,
+                @store_id,
+                FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%E6SZ', CURRENT_TIMESTAMP()),
+                @order_total
+            )
         """
         
         job_config = bigquery.QueryJobConfig(
@@ -542,3 +546,4 @@ def create_order(order_request: CreateOrderRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating order: {str(e)}")
+
